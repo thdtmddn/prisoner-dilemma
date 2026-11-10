@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>부스 모니터 · 죄수의 딜레마</title>
+<link rel="stylesheet" href="/style.css">
+<style>
+  body { background: #14172b; color: #fff; }
+  .mwrap { max-width: 1400px; margin: 0 auto; padding: 2vh 3vw; }
+  .mtitle { text-align: center; font-size: 28px; font-size: clamp(28px, 4.5vw, 64px); font-weight: 900; margin: 0; }
+  .msub { text-align: center; color: #aab; font-size: 16px; font-size: clamp(16px, 2vw, 26px); margin: 0 0 2vh; }
+  .ratio { display: flex; height: 80px; height: clamp(80px, 13vh, 170px); border-radius: 24px; overflow: hidden; background: #333; }
+  .ratio div { display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 28px; font-size: clamp(28px, 5vw, 72px); transition: width .8s ease; white-space: nowrap; overflow: hidden; }
+  .rc { background: var(--coop); } .rd { background: var(--betray); }
+  .legend { display: flex; justify-content: space-between; font-size: 18px; font-size: clamp(18px, 2.4vw, 34px); font-weight: 800; margin: 1vh 0 2vh; }
+  .row2 .payoff td, .row2 .payoff th { padding: 6px 4px; }
+  .row2 .payoff-title { display: none; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 2vw; }
+  .stat { background: #22264a; border-radius: 20px; padding: 1.5vh 1vw; text-align: center; }
+  .stat .n { font-size: 36px; font-size: clamp(36px, 5.5vw, 84px); font-weight: 900; line-height: 1.1; }
+  .stat .l { font-size: 15px; font-size: clamp(15px, 1.6vw, 24px); color: #ccd; }
+  .bars { display: flex; align-items: flex-end; height: 18vh; margin-top: 1vh; }
+  .bar { flex: 1; margin: 0 .75vw; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+  .bar .fill { width: 100%; background: var(--coop); border-radius: 10px 10px 0 0; transition: height .8s ease; min-height: 2px; }
+  .bar .pct { font-weight: 800; font-size: 16px; font-size: clamp(16px, 1.8vw, 26px); }
+  .bar .lab { color: #aab; font-size: 15px; font-size: clamp(15px, 1.4vw, 20px); margin-top: 4px; }
+  .section { background: #1b1f3b; border-radius: 20px; padding: 1.5vh 1.5vw; margin-top: 2.5vh; }
+  .section h3 { margin: 0 0 1vh; font-size: 18px; font-size: clamp(18px, 2.2vw, 30px); }
+  .row2 { display: grid; grid-template-columns: 3fr 2fr; gap: 2vw; }
+  .row2 .payoff { color: #222; background: #fff; border-radius: 12px; font-size: 14px; font-size: clamp(14px, 1.4vw, 20px); }
+  .live { display: inline-block; width: 14px; height: 14px; background: #2fb344; border-radius: 50%; margin-right: 8px; animation: blink 1.5s infinite; }
+  .live.off { background: #e03131; animation: none; }
+  @keyframes blink { 50% { opacity: .3; } }
+  @media (max-width: 800px) { .row2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="mwrap">
+  <p class="mtitle">🍬 지금까지 사람들의 선택은? 🍬</p>
+  <p class="msub"><span class="live" id="live"></span>야탑제 · 심리탐구 동아리 · 죄수의 딜레마 실시간 집계</p>
+
+  <div class="ratio"><div class="rc" id="barC" style="width:50%">🤝 50%</div><div class="rd" id="barD" style="width:50%">😈 50%</div></div>
+  <div class="legend"><span>🤝 협력 <span id="nC">0</span>번</span><span>배신 <span id="nD">0</span>번 😈</span></div>
+
+  <div class="stats">
+    <div class="stat"><div class="n" id="sRounds">0</div><div class="l">진행된 라운드</div></div>
+    <div class="stat"><div class="n" id="sGames">0</div><div class="l">끝난 게임 (팀)</div></div>
+    <div class="stat"><div class="n" id="sMutual" style="color:#69db7c">0%</div><div class="l">서로 협력한 라운드</div></div>
+    <div class="stat"><div class="n" id="sBoth" style="color:#ff8787">0%</div><div class="l">서로 배신한 라운드</div></div>
+    <div class="stat"><div class="n" id="sActive">0</div><div class="l">지금 게임 중인 방</div></div>
+  </div>
+
+  <div class="row2">
+    <div class="section">
+      <h3>라운드별 협력 비율</h3>
+      <div class="bars" id="bars"></div>
+    </div>
+    <div class="section">
+      <h3>🍬 사탕 보상표</h3>
+      <div id="payoff"></div>
+    </div>
+  </div>
+</div>
+<script src="/socket.io/socket.io.js"></script>
+<script src="/common.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
+  const socket = io({ transports: ['websocket', 'polling'] });
+  socket.on('connect', () => { $('live').classList.remove('off'); socket.emit('monitor'); });
+  socket.on('disconnect', () => $('live').classList.add('off'));
+  // 화면이 꺼졌다 켜지거나 와이파이가 다시 잡히면 다시 연결
+  function wake() {
+    if (document.visibilityState === 'hidden') return;
+    if (!socket.connected) socket.connect();
+    else socket.emit('monitor');
+  }
+  document.addEventListener('visibilitychange', wake);
+  window.addEventListener('pageshow', wake);
+  window.addEventListener('online', wake);
+  socket.on('stats', (s) => {
+    const total = s.cooperate + s.betray;
+    const c = total ? pct(s.cooperate, total) : 50;
+    const d = total ? 100 - c : 50;
+    $('barC').style.width = c + '%'; $('barD').style.width = d + '%';
+    $('barC').textContent = c >= 12 ? `🤝 ${total ? c : '-'}%` : '';
+    $('barD').textContent = d >= 12 ? `😈 ${total ? d : '-'}%` : '';
+    $('nC').textContent = s.cooperate; $('nD').textContent = s.betray;
+    $('sRounds').textContent = s.rounds;
+    $('sGames').textContent = s.gamesFinished;
+    $('sMutual').textContent = pct(s.bothCooperate, s.rounds) + '%';
+    $('sBoth').textContent = pct(s.bothBetray, s.rounds) + '%';
+    $('sActive').textContent = s.activeRooms;
+    const keys = Object.keys(s.byRound || {}).map(Number);
+    const shown = Math.max(s.configRounds || 5, keys.length ? Math.max(...keys) : 0);
+    let html = '';
+    for (let r = 1; r <= shown; r++) {
+      const b = s.byRound[r] || { cooperate: 0, betray: 0 };
+      const t = b.cooperate + b.betray;
+      const p = pct(b.cooperate, t);
+      html += `<div class="bar"><div class="pct">${t ? p + '%' : '-'}</div><div class="fill" style="height:${t ? Math.max(p, 2) : 0}%"></div><div class="lab">${r}라운드</div></div>`;
+    }
+    $('bars').innerHTML = html;
+    $('payoff').innerHTML = PD.payoffTable(s.payoff, { compact: true }) + '<div style="color:#aab;text-align:center;margin-top:6px">(나 : 상대) 받는 사탕 개수</div>';
+  });
+})();
+</script>
+</body>
+</html>

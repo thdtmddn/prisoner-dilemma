@@ -1,0 +1,13 @@
+{
+  "port": 3000,
+  "adminPin": "1234",
+  "rounds": 5,
+  "payoff": {
+    "CC": 3,
+    "CD": 0,
+    "DC": 5,
+    "DD": 1
+  },
+  "publicUrl": "",
+  "cleanupHours": 6
+}

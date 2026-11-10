@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#3b5bdb">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="format-detection" content="telephone=no">
+<title>죄수의 딜레마 체험 부스 · 야탑제</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="connBanner" class="conn-banner hidden">연결이 끊겼어요. 다시 연결하는 중…</div>
+<div class="wrap">
+
+  <section id="loading" class="screen hidden"><h2 style="margin-top:40px">불러오는 중… ⏳</h2></section>
+
+  <!-- 홈 -->
+  <section id="home" class="screen two-col hidden">
+    <div class="col-main">
+    <h1>🍬 죄수의 딜레마 🍬</h1>
+    <p class="sub">야탑제 · 심리탐구 동아리 체험 부스</p>
+    <button class="btn" id="goCreate">🏠 방 만들기</button>
+    <button class="btn orange" id="goJoin">🔑 방 참가하기</button>
+    <div class="card">
+      <p style="margin-top:0"><b>어떻게 하나요?</b></p>
+      <ol style="margin:0;padding-left:22px">
+        <li>한 명이 <b>방 만들기</b>를 누르면 방 코드와 QR이 나와요.</li>
+        <li>다른 한 명은 <b>방 참가하기</b>에서 코드를 넣거나 QR을 찍어요.</li>
+        <li>매 라운드 <b style="color:var(--coop)">협력</b> 또는 <b style="color:var(--betray)">배신</b>을 골라요. 상대가 뭘 골랐는지는 둘 다 고른 뒤에 공개돼요.</li>
+        <li><span class="js-rounds">5</span>라운드가 끝나면 모은 사탕을 받아 가요!</li>
+      </ol>
+    </div>
+    </div>
+    <div class="col-side"><div class="card"><div class="js-payoff"></div></div></div>
+  </section>
+
+  <!-- 방 만들기 -->
+  <section id="create" class="screen hidden">
+    <h2>🏠 방 만들기</h2>
+    <div class="card">
+      <label for="createName">내 이름 (안 써도 돼요)</label>
+      <input id="createName" class="big" maxlength="12" placeholder="예: 김야탑" autocomplete="off">
+    </div>
+    <button class="btn" id="doCreate">방 만들기</button>
+    <button class="btn light small js-home">← 처음으로</button>
+  </section>
+
+  <!-- 방 참가 -->
+  <section id="join" class="screen hidden">
+    <h2>🔑 방 참가하기</h2>
+    <div class="card">
+      <label for="joinCode">방 코드 (숫자 4자리)</label>
+      <input id="joinCode" class="big code" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="0000" autocomplete="off">
+      <label for="joinName">내 이름 (안 써도 돼요)</label>
+      <input id="joinName" class="big" maxlength="12" placeholder="예: 이탑제" autocomplete="off">
+    </div>
+    <button class="btn orange" id="doJoin">참가하기</button>
+    <button class="btn light small js-home">← 처음으로</button>
+  </section>
+
+  <!-- 대기실 -->
+  <section id="waiting" class="screen hidden">
+    <h2>상대를 기다리는 중… ⏳</h2>
+    <div class="card center wait-card">
+      <div class="wait-code"><div>방 코드</div>
+      <p class="roomcode" id="waitCode">----</p></div>
+      <div class="wait-qr"><img class="qr" id="waitQr" alt="참가용 QR 코드">
+      <div class="joinurl" id="waitUrl"></div></div>
+      <p style="margin-bottom:0">상대방은 <b>방 참가하기</b>에서 이 코드를 입력하거나 휴대폰 카메라로 QR을 찍으면 돼요.</p>
+    </div>
+    <button class="btn light small" id="cancelWait">방 취소하기</button>
+  </section>
+
+  <!-- 선택 -->
+  <section id="play" class="screen two-col hidden">
+    <div class="col-main">
+    <div class="topbar">
+      <span class="pill">방 <b class="js-code"></b></span>
+      <span class="pill"><span class="dot" id="oppDot"></span> <span id="oppConn"></span></span>
+    </div>
+    <p class="roundno"><span id="roundNo">1</span> / <span class="js-total">5</span> 라운드</p>
+    <p class="myscore"><span id="meName"></span> · 지금까지 내 사탕 <b id="myTotal">0</b>개</p>
+    <div class="choices">
+      <button class="choice C" data-choice="C"><span class="emoji">🤝</span>협력</button>
+      <button class="choice D" data-choice="D"><span class="emoji">😈</span>배신</button>
+    </div>
+    <button class="btn hidden" id="confirmChoice">이걸로 결정!</button>
+    <div class="status" id="playStatus"></div>
+    </div>
+    <div class="col-side"><div class="card"><div class="js-payoff"></div></div></div>
+  </section>
+
+  <!-- 라운드 결과 -->
+  <section id="result" class="screen two-col hidden">
+    <div class="col-main">
+    <p class="roundno"><span id="resRound">1</span>라운드 결과</p>
+    <div class="result-grid" id="resGrid"></div>
+    <p class="result-msg" id="resMsg"></p>
+    <p class="myscore">지금까지 내 사탕 <b id="resTotal">0</b>개</p>
+    <button class="btn" id="nextRound">다음 라운드 ▶</button>
+    </div>
+    <div class="col-side"><div class="card"><div class="js-payoff"></div></div></div>
+  </section>
+
+  <!-- 최종 -->
+  <section id="final" class="screen two-col hidden">
+    <div class="col-main">
+    <h2>🎉 게임 끝! 받을 사탕 🍬</h2>
+    <div class="final-totals" id="finalTotals"></div>
+    </div>
+    <div class="col-side">
+    <div class="card">
+      <table class="history" id="finalHistory"></table>
+    </div>
+    </div>
+    <div class="col-foot">
+    <p class="center final-note">이 화면을 동아리원에게 보여주세요! 🙌</p>
+    <p class="center" style="color:var(--muted)">방 <b class="js-code"></b></p>
+    <button class="btn secondary" id="newGame">처음 화면으로</button>
+    </div>
+  </section>
+
+  <p class="footer">심리탐구 동아리 · 야탑제</p>
+</div>
+<div id="toast" class="toast hidden"></div>
+<script src="/socket.io/socket.io.js"></script>
+<script src="/common.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

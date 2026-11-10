@@ -1,0 +1,32 @@
+{
+  "name": "prisoners-dilemma-booth",
+  "version": "1.0.0",
+  "description": "야탑제 심리탐구 동아리 죄수의 딜레마 체험 부스",
+  "main": "server.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/e2e.js",
+    "screenshots": "node test/screenshots.js",
+    "test:tablet": "node test/tablet.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^4.22.3",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.4"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.65.0",
+    "socket.io-client": "^4.8.4"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "private": true
+}

@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>관리자 · 죄수의 딜레마 부스</title>
+<link rel="stylesheet" href="/style.css">
+<style>
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .grid2 input { font-size: 26px; text-align: center; }
+  .rooms { width: 100%; border-collapse: collapse; font-size: 15px; }
+  .rooms td, .rooms th { border-bottom: 1px solid #eee; padding: 6px 4px; text-align: center; }
+  .hint { color: var(--muted); font-size: 15px; }
+  summary { display: block; padding: 14px 4px; min-height: 48px; font-size: 20px; font-weight: 700; cursor: pointer; }
+  .biglink { display: inline-block; padding: 12px 16px; min-height: 48px; font-size: 20px; font-weight: 700; }
+  .rooms .btn.small { min-height: 48px; }
+  code { background: #f1f3f5; padding: 2px 6px; border-radius: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>⚙️ 관리자 화면</h1>
+  <p class="sub">죄수의 딜레마 체험 부스</p>
+
+  <section id="login" class="card">
+    <label for="pin">관리자 PIN</label>
+    <input id="pin" class="big" type="password" inputmode="numeric" autocomplete="off">
+    <button class="btn" id="doLogin">들어가기</button>
+  </section>
+
+  <section id="panel" class="hidden">
+    <div class="card">
+      <h2>🍬 사탕 보상표</h2>
+      <p class="hint">“나”가 고른 것 + “상대”가 고른 것에 따라 <b>내가</b> 받는 사탕 개수예요. 바꾸면 <b>새로 만드는 방부터</b> 적용돼요.</p>
+      <div class="grid2">
+        <div><label>둘 다 협력 (각자)</label><input class="big" id="pCC" type="number" min="0"></div>
+        <div><label>둘 다 배신 (각자)</label><input class="big" id="pDD" type="number" min="0"></div>
+        <div><label>나 배신 · 상대 협력 → 배신한 나</label><input class="big" id="pDC" type="number" min="0"></div>
+        <div><label>나 협력 · 상대 배신 → 협력한 나</label><input class="big" id="pCD" type="number" min="0"></div>
+      </div>
+      <label>라운드 수</label>
+      <input class="big" id="rounds" type="number" min="1" max="20">
+      <div id="preview" style="margin-top:14px"></div>
+      <details style="margin-top:12px">
+        <summary>고급 설정</summary>
+        <label>QR 주소 직접 지정 (비워두면 자동)</label>
+        <input class="big" id="publicUrl" placeholder="예: http://192.168.0.15:3000" autocomplete="off">
+        <p class="hint">자동 감지 주소: <span id="lanInfo"></span></p>
+        <label>끝난 방 자동 삭제 (시간)</label>
+        <input class="big" id="cleanupHours" type="number" min="0.1" step="0.5">
+        <label>새 관리자 PIN (바꿀 때만 입력)</label>
+        <input class="big" id="newPin" autocomplete="off">
+      </details>
+      <button class="btn" id="save">💾 저장하기</button>
+    </div>
+
+    <div class="card">
+      <h2>📊 통계</h2>
+      <p class="hint">부스 모니터 화면: <a class="biglink" href="/monitor" target="_blank">📺 /monitor 열기</a></p>
+      <button class="btn secondary" id="resetStats">통계 초기화</button>
+      <button class="btn light" id="cleanFinished">끝난 방 모두 지우기</button>
+    </div>
+
+    <div class="card">
+      <h2>🚪 지금 있는 방</h2>
+      <button class="btn light small" id="refreshRooms">새로고침</button>
+      <table class="rooms" id="rooms"></table>
+    </div>
+  </section>
+</div>
+<div id="toast" class="toast hidden"></div>
+<script src="/common.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const ss = {
+    get(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { ss.set(k, v); } catch (e) {} },
+    del(k) { try { ss.del(k); } catch (e) {} },
+  };
+  let pin = ss.get('pd_admin_pin') || '';
+  function toast(m) { const t = $('toast'); t.textContent = m; t.classList.remove('hidden'); setTimeout(() => t.classList.add('hidden'), 2500); }
+  async function api(path, body) {
+    const r = await fetch(path, {
+      method: body ? 'POST' : 'GET',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Pin': pin },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || '오류가 났어요');
+    return j;
+  }
+  function readPayoff() { return { CC: +$('pCC').value, CD: +$('pCD').value, DC: +$('pDC').value, DD: +$('pDD').value }; }
+  function updatePreview() { $('preview').innerHTML = PD.payoffTable(readPayoff()); }
+  ['pCC', 'pCD', 'pDC', 'pDD'].forEach((id) => $(id).addEventListener('input', updatePreview));
+
+  async function load() {
+    const c = await api('/api/admin/config');
+    $('pCC').value = c.payoff.CC; $('pCD').value = c.payoff.CD; $('pDC').value = c.payoff.DC; $('pDD').value = c.payoff.DD;
+    $('rounds').value = c.rounds; $('publicUrl').value = c.publicUrl || ''; $('cleanupHours').value = c.cleanupHours;
+    $('lanInfo').textContent = (c.lan || []).map((x) => `http://${x.address}:${c.port} (${x.name})`).join(', ') || '없음';
+    updatePreview();
+    loadRooms();
+  }
+  async function loadRooms() {
+    const list = await api('/api/admin/rooms');
+    const st = { waiting: '대기', playing: '진행 중', finished: '끝' };
+    $('rooms').innerHTML = '<tr><th>코드</th><th>상태</th><th>라운드</th><th>참가자 (사탕)</th><th></th></tr>' +
+      (list.length ? list.map((r) => `<tr><td><b>${r.code}</b></td><td>${st[r.status]}</td><td>${r.round}/${r.totalRounds}</td><td>${r.players.map((p, i) => p ? `${p.connected ? '🟢' : '⚪'} ${PD.esc(p.name)} (${r.totals[i]})` : '-').join('<br>')}</td><td><button class="btn light small" style="margin:0" data-del="${r.code}">삭제</button></td></tr>`).join('') : '<tr><td colspan="5">방이 없어요</td></tr>');
+  }
+  $('rooms').addEventListener('click', async (e) => {
+    const code = e.target.dataset.del;
+    if (!code || !confirm(code + ' 방을 지울까요?')) return;
+    await api('/api/admin/delete-room', { code }); loadRooms();
+  });
+  async function login() {
+    try {
+      await api('/api/admin/login', {});
+      ss.set('pd_admin_pin', pin);
+      $('login').classList.add('hidden'); $('panel').classList.remove('hidden');
+      load();
+    } catch (e) { ss.del('pd_admin_pin'); if ($('pin').value) toast('PIN이 틀렸어요.'); }
+  }
+  $('doLogin').onclick = () => { pin = $('pin').value; login(); };
+  $('pin').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('doLogin').click(); });
+  $('save').onclick = async () => {
+    try {
+      const body = { payoff: readPayoff(), rounds: +$('rounds').value, publicUrl: $('publicUrl').value, cleanupHours: +$('cleanupHours').value };
+      if ($('newPin').value.trim()) body.adminPin = $('newPin').value.trim();
+      await api('/api/admin/config', body);
+      if (body.adminPin) { pin = body.adminPin; ss.set('pd_admin_pin', pin); $('newPin').value = ''; }
+      toast('저장했어요! 새로 만드는 방부터 적용돼요.');
+      load();
+    } catch (e) { toast(e.message); }
+  };
+  $('resetStats').onclick = async () => { if (!confirm('통계를 모두 0으로 되돌릴까요?')) return; await api('/api/admin/reset-stats', {}); toast('통계를 초기화했어요.'); };
+  $('cleanFinished').onclick = async () => { const r = await api('/api/admin/cleanup-finished', {}); toast(`끝난 방 ${r.removed}개를 지웠어요.`); loadRooms(); };
+  $('refreshRooms').onclick = loadRooms;
+  if (pin) login();
+})();
+</script>
+</body>
+</html>

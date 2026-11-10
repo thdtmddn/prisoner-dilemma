@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: prisoner-dilemma
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm install --omit=dev
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: ADMIN_PIN
+        sync: false
