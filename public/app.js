@@ -41,12 +41,13 @@
     SS.del(KEY);
     LS.del(KEY);
   }
-  function seenKey(code) { return 'pd_seen_' + code; }
-  function getSeen(code) { return Number(LS.get(seenKey(code)) || 0); }
-  function setSeen(code, n) { LS.set(seenKey(code), String(n)); }
 
   let view = null;      // 서버가 보내준 현재 상태
   let pending = null;   // 아직 확정하지 않은 선택
+  let lastCode = null;  // 방 코드가 바뀌면 라운드 추적 초기화
+  let lastRoundShown = 0;
+  let transTimer = null;
+  let transitioning = false;
   let info = { payoff: { CC: 3, CD: 0, DC: 5, DD: 1 }, rounds: 5 };
 
   // ---- 화면 전환 ----
@@ -155,13 +156,20 @@
   // ---- 상태에 맞게 그리기 ----
   function render() {
     if (!view) return;
+    if (transitioning) return;
     const v = view;
     const me = v.seat;
     const other = 1 - me;
     fillPayoff(v.payoff, v.totalRounds);
     document.querySelectorAll('.js-code').forEach((el) => (el.textContent = v.code));
 
+    if (lastCode !== v.code) {
+      lastCode = v.code;
+      lastRoundShown = 0;
+    }
+
     if (v.status === 'waiting') {
+      lastRoundShown = 0;
       $('waitCode').textContent = v.code;
       const qrSrc = '/api/qr.svg?code=' + v.code;
       if ($('waitQr').getAttribute('src') !== qrSrc) $('waitQr').src = qrSrc;
@@ -170,22 +178,28 @@
       return;
     }
 
-    const seen = getSeen(v.code);
-    if (seen < v.history.length) {
-      renderResult(v, v.history[v.history.length - 1]);
-      return;
-    }
+    // 방금 라운드가 끝났으면 선택·사탕은 숨긴 채 짧은 안내만 보여 준다.
+    // 새로고침/재접속에서는 lastRoundShown 이 0이라 안내 없이 바로 현재 화면으로 간다.
     if (v.status === 'finished') {
+      if (lastRoundShown && lastRoundShown < v.totalRounds) {
+        showTransition(v.totalRounds, true);
+        return;
+      }
+      lastRoundShown = v.totalRounds;
       renderFinal(v);
       return;
     }
+    if (lastRoundShown && v.round > lastRoundShown && !v.myChoice) {
+      showTransition(lastRoundShown, false);
+      return;
+    }
+    lastRoundShown = v.round;
     renderPlay(v, me, other);
   }
 
   function renderPlay(v, me, other) {
     const opp = v.players[other];
     $('roundNo').textContent = v.round;
-    $('myTotal').textContent = v.totals[me];
     $('meName').textContent = (v.players[me] && v.players[me].name) || '나';
     $('oppDot').className = 'dot ' + (opp && opp.connected ? 'on' : 'off');
     $('oppConn').textContent = opp ? `상대 ${opp.name} · ${opp.connected ? '접속 중' : '연결 끊김'}` : '상대 없음';
@@ -206,7 +220,7 @@
     const st = $('playStatus');
     if (chosen) {
       st.className = 'status ok';
-      st.textContent = v.opponentChosen ? '둘 다 골랐어요! 결과 계산 중…' : `✅ 선택 완료! 상대가 고르는 중이에요… 🤔`;
+      st.textContent = v.opponentChosen ? '둘 다 골랐어요! 다음으로 넘어가는 중…' : `✅ 선택 완료! 상대가 고르는 중이에요… 🤔`;
     } else {
       st.className = 'status' + (opp && !opp.connected ? ' warn' : '');
       if (opp && !opp.connected) st.textContent = '상대 연결이 끊겼어요. 잠깐 기다려 주세요.';
@@ -215,26 +229,24 @@
     show('play');
   }
 
-  function renderResult(v, h) {
-    const me = v.seat, other = 1 - me;
-    const myC = h.choices[me], opC = h.choices[other];
-    const box = (who, c, gain) =>
-      `<div class="result-box ${c}"><div class="who">${esc(who)}</div><div class="what">${CHOICE_EMOJI[c]} ${CHOICE_TEXT[c]}</div><div class="gain">+${gain}🍬</div></div>`;
-    $('resRound').textContent = h.round;
-    $('resGrid').innerHTML =
-      box('나 (' + ((v.players[me] && v.players[me].name) || '') + ')', myC, h.candies[me]) +
-      box('상대 (' + ((v.players[other] && v.players[other].name) || '') + ')', opC, h.candies[other]);
-    let msg;
-    if (myC === 'C' && opC === 'C') msg = '둘 다 협력했어요! 🤝 사이좋게 나눠요.';
-    else if (myC === 'D' && opC === 'D') msg = '둘 다 배신했어요… 😈😈';
-    else if (myC === 'D') msg = '내가 배신했어요! 😈 상대는 협력했는데…';
-    else msg = '상대가 배신했어요… 😢';
-    $('resMsg').textContent = msg;
-    const myTotal = v.history.slice(0, h.round).reduce((a, x) => a + x.candies[me], 0);
-    $('resTotal').textContent = myTotal;
-    const last = v.history.length >= v.totalRounds;
-    $('nextRound').textContent = last ? '최종 결과 보기 🍬' : '다음 라운드 ▶';
+  function showTransition(completedRound, goFinal) {
+    pending = null;
+    transitioning = true;
+    $('resRound').textContent = completedRound;
+    $('resMsg').textContent = goFinal ? '모든 라운드가 끝났어요!' : '다음 라운드로';
     show('result');
+    clearTimeout(transTimer);
+    transTimer = setTimeout(function () {
+      transitioning = false;
+      if (!view) return;
+      if (goFinal || view.status === 'finished') {
+        lastRoundShown = view.totalRounds;
+        renderFinal(view);
+      } else {
+        lastRoundShown = view.round;
+        renderPlay(view, view.seat, 1 - view.seat);
+      }
+    }, 1400);
   }
 
   function renderFinal(v) {
@@ -273,7 +285,6 @@
       busy = false;
       if (!res || !res.ok) return toast((res && res.error) || '방을 만들지 못했어요.');
       setSession({ code: res.code, token: res.token });
-      setSeen(res.code, 0);
       history.replaceState(null, '', '/');
       adopt(res.code);
     });
@@ -287,7 +298,6 @@
       busy = false;
       if (!res || !res.ok) return toast((res && res.error) || '참가하지 못했어요.');
       setSession({ code: res.code, token: res.token });
-      setSeen(res.code, 0);
       history.replaceState(null, '', '/');
       adopt(res.code);
     });
@@ -317,12 +327,6 @@
       if (!res || !res.ok) toast((res && res.error) || '선택을 보내지 못했어요.');
       render();
     });
-  };
-  $('nextRound').onclick = () => {
-    if (!view) return;
-    setSeen(view.code, view.history.length);
-    pending = null;
-    render();
   };
   $('newGame').onclick = () => {
     socket.emit('leave', {}, () => {});

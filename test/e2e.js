@@ -85,12 +85,16 @@ async function newGame(nameA = '철수', nameB = '영희') {
   return { A, B, code: c.code, tokA: c.token, tokB: j.token, c, j };
 }
 
+function hiddenDuringPlay(v) {
+  return v.status !== 'finished' && v.history === undefined && v.totals === undefined;
+}
+
 async function playRound(A, B, a, b) {
-  const n = A.view.history.length;
+  const startRound = A.view.round;
   const r1 = await A.emit('choose', { choice: a });
   const r2 = await B.emit('choose', { choice: b });
-  await A.waitFor((v) => v.history.length === n + 1);
-  await B.waitFor((v) => v.history.length === n + 1);
+  await A.waitFor((v) => v.status === 'finished' || v.round > startRound);
+  await B.waitFor((v) => v.status === 'finished' || v.round > startRound);
   return r1.ok && r2.ok;
 }
 
@@ -121,25 +125,26 @@ async function playRound(A, B, a, b) {
   B.views = [];
   await A.emit('choose', { choice: 'D' });
   const bv = await B.waitFor((v) => v.opponentChosen === true);
-  ok(bv.myChoice === null && bv.history.length === 0, 'A가 골라도 B 화면에는 "골랐다"는 사실만 전달');
+  ok(bv.myChoice === null && hiddenDuringPlay(bv), 'A가 골라도 B 화면에는 "골랐다"는 사실만 전달 (기록·합계 없음)');
   ok(!JSON.stringify(B.views).includes('"D"'), 'B에게 간 데이터 어디에도 A의 선택(배신)이 없음');
   ok(!('choices' in bv), '서버 응답에 상대 현재 선택 필드 없음');
   const again = await A.emit('choose', { choice: 'C' });
   ok(!again.ok, '한 라운드에 두 번 고를 수 없음');
   await B.emit('choose', { choice: 'D' });
-  await A.waitFor((v) => v.history.length === 1);
-  const h1 = A.view.history[0];
-  ok(h1.choices.join() === 'D,D' && h1.candies.join() === '1,1', '1라운드 결과 동시 공개: 배신/배신 → 1/1');
+  await A.waitFor((v) => v.round === 2);
+  await B.waitFor((v) => v.round === 2);
+  ok(A.view.status === 'playing' && A.view.round === 2 && A.view.myChoice === null, '1라운드가 끝나면 바로 2라운드로');
+  ok(hiddenDuringPlay(A.view) && hiddenDuringPlay(B.view), '라운드가 끝나도 게임이 끝날 때까지 결과(기록·사탕)를 보내지 않음');
 
   // 3. 4가지 조합 + 5라운드
   console.log('\n[3] 보상 계산 (4가지 조합) · 5라운드');
   await playRound(A, B, 'C', 'C'); // 3/3
   await playRound(A, B, 'C', 'D'); // 0/5
   await playRound(A, B, 'D', 'C'); // 5/0
-  ok(A.view.status === 'playing' && A.view.round === 5, '4라운드 후 아직 진행 중 (5라운드 차례)');
+  ok(A.view.status === 'playing' && A.view.round === 5 && hiddenDuringPlay(A.view), '4라운드 후 아직 진행 중 (5라운드 차례), 결과는 숨김');
   await playRound(A, B, 'C', 'C'); // 3/3
   const cand = A.view.history.map((h) => h.candies.join('/')).join(' ');
-  ok(cand === '1/1 3/3 0/5 5/0 3/3', `라운드별 사탕: ${cand}`);
+  ok(cand === '1/1 3/3 0/5 5/0 3/3', `종료 후 라운드별 사탕: ${cand}`);
   ok(A.view.status === 'finished' && B.view.status === 'finished', '5라운드 후 게임 종료');
   ok(A.view.totals.join() === '12,12' && B.view.totals.join() === '12,12', `합계 A=${A.view.totals[0]}, B=${A.view.totals[1]} (기대 12/12)`);
   const late = await A.emit('choose', { choice: 'C' });
@@ -154,10 +159,14 @@ async function playRound(A, B, a, b) {
   await g3.A.emit('choose', { choice: 'D' });
   await g3.B.emit('choose', { choice: 'D' });
   await g2.B.emit('choose', { choice: 'D' });
-  await g2.A.waitFor((v) => v.history.length === 1);
-  await g3.A.waitFor((v) => v.history.length === 1);
-  ok(g2.A.view.history[0].candies.join() === '0,5', '방 2: 협력/배신 → 0/5');
-  ok(g3.A.view.history[0].candies.join() === '1,1', '방 3: 배신/배신 → 1/1 (섞이지 않음)');
+  await g2.A.waitFor((v) => v.round === 2);
+  await g3.A.waitFor((v) => v.round === 2);
+  ok(hiddenDuringPlay(g2.A.view) && hiddenDuringPlay(g3.A.view), '진행 중에는 두 방 모두 플레이어에게 기록이 안 보임');
+  const midRooms = (await api('/api/admin/rooms')).json;
+  const r2admin = midRooms.find((r) => r.code === g2.code);
+  const r3admin = midRooms.find((r) => r.code === g3.code);
+  ok(r2admin && r2admin.totals.join() === '0,5', '방 2: 협력/배신 → 0/5 (관리자 기록)');
+  ok(r3admin && r3admin.totals.join() === '1,1', '방 3: 배신/배신 → 1/1 (섞이지 않음)');
 
   // g2 A가 2라운드에서 고른 뒤 새로고침(연결 끊김)
   await g2.A.emit('choose', { choice: 'D' });
@@ -167,15 +176,15 @@ async function playRound(A, B, a, b) {
   const A2 = new Player('A2'); await A2.connect();
   const res = await A2.emit('resume', { code: g2.code, token: g2.tokA });
   ok(res.ok, '저장된 토큰으로 같은 자리에 복귀');
-  ok(A2.view && A2.view.seat === 0 && A2.view.myChoice === 'D' && A2.view.history.length === 1, '복귀 후 이전 상태(이번 라운드 내 선택 포함) 그대로');
+  ok(A2.view && A2.view.seat === 0 && A2.view.myChoice === 'D' && A2.view.round === 2 && hiddenDuringPlay(A2.view), '복귀 후 이전 상태(이번 라운드 내 선택 포함) 그대로, 결과는 숨김');
   await g2.B.waitFor((v) => v.players[0].connected === true);
   ok(true, 'B 화면에 다시 "접속 중"');
   const wrong = await A2.emit('resume', { code: g2.code, token: 'nope' });
   ok(!wrong.ok, '틀린 토큰으로는 복귀 불가');
   await A2.emit('resume', { code: g2.code, token: g2.tokA });
   await g2.B.emit('choose', { choice: 'D' });
-  await A2.waitFor((v) => v.history.length === 2);
-  ok(A2.view.history[1].candies.join() === '1,1', '복귀한 뒤에도 라운드 정상 진행');
+  await A2.waitFor((v) => v.round === 3);
+  ok(A2.view.status === 'playing' && A2.view.round === 3 && hiddenDuringPlay(A2.view), '복귀한 뒤에도 라운드 정상 진행, 결과는 숨김');
 
   // 5. 서버 재시작해도 방 유지
   console.log('\n[5] 서버 재시작 후에도 방 유지');
@@ -186,11 +195,12 @@ async function playRound(A, B, a, b) {
   await A3.connect(); await B3.connect();
   ok((await A3.emit('resume', { code: g2.code, token: g2.tokA })).ok && (await B3.emit('resume', { code: g2.code, token: g2.tokB })).ok, '재시작 후 두 사람 모두 복귀');
   await A3.waitFor((v) => v.players[1] && v.players[1].connected);
-  ok(A3.view.history.length === 2 && A3.view.totals.join() === '1,6', `재시작 후 기록 유지 (합계 ${A3.view.totals})`);
+  ok(A3.view.round === 3 && A3.view.status === 'playing' && hiddenDuringPlay(A3.view), '재시작 후 진행 상태 유지, 결과는 종료 전까지 숨김');
   await playRound(A3, B3, 'C', 'C');
   await playRound(A3, B3, 'C', 'C');
   await playRound(A3, B3, 'D', 'D');
   ok(A3.view.status === 'finished' && A3.view.totals.join() === '8,13', `방 2 최종 합계 ${A3.view.totals} (기대 8,13)`);
+  ok(A3.view.history.map((h) => h.candies.join('/')).join(' ') === '0/5 1/1 3/3 3/3 1/1', '종료 후에야 전체 라운드 기록이 공개됨');
 
   // 6. 관리자: 보상 변경은 새 게임부터
   console.log('\n[6] 관리자 화면 (PIN, 보상표·라운드 변경)');
@@ -203,7 +213,9 @@ async function playRound(A, B, a, b) {
   const saved = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
   ok(saved.payoff.CC === 10 && saved.rounds === 3, 'config.json 파일에도 저장됨');
   await playRound(g4.A, g4.B, 'C', 'C');
-  ok(g4.A.view.history[0].candies.join() === '3,3' && g4.A.view.totalRounds === 5, '이미 만든 방은 예전 보상표(3/3, 5라운드) 유지');
+  ok(g4.A.view.totalRounds === 5 && g4.A.view.payoff.CC === 3 && hiddenDuringPlay(g4.A.view), '이미 만든 방은 예전 보상표(3/3, 5라운드) 유지, 결과는 숨김');
+  const g4room = (await api('/api/admin/rooms')).json.find((r) => r.code === g4.code);
+  ok(g4room && g4room.totals.join() === '3,3', '예전 보상표로 1라운드 계산 3/3 (관리자 기록)');
   const g5 = await newGame('새방A', '새방B');
   ok(g5.A.view.totalRounds === 3 && g5.A.view.payoff.CC === 10, '새 방은 새 보상표·3라운드');
   await playRound(g5.A, g5.B, 'C', 'C');

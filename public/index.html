@@ -28,7 +28,7 @@
       <ol style="margin:0;padding-left:22px">
         <li>한 명이 <b>방 만들기</b>를 누르면 방 코드와 QR이 나와요.</li>
         <li>다른 한 명은 <b>방 참가하기</b>에서 코드를 넣거나 QR을 찍어요.</li>
-        <li>매 라운드 <b style="color:var(--coop)">협력</b> 또는 <b style="color:var(--betray)">배신</b>을 골라요. 상대가 뭘 골랐는지는 둘 다 고른 뒤에 공개돼요.</li>
+        <li>매 라운드 <b style="color:var(--coop)">협력</b> 또는 <b style="color:var(--betray)">배신</b>을 골라요. 상대가 뭘 골랐는지는 <b>모든 라운드가 끝난 뒤</b>에 한꺼번에 공개돼요.</li>
         <li><span class="js-rounds">5</span>라운드가 끝나면 모은 사탕을 받아 가요!</li>
       </ol>
     </div>
@@ -81,7 +81,7 @@
       <span class="pill"><span class="dot" id="oppDot"></span> <span id="oppConn"></span></span>
     </div>
     <p class="roundno"><span id="roundNo">1</span> / <span class="js-total">5</span> 라운드</p>
-    <p class="myscore"><span id="meName"></span> · 지금까지 내 사탕 <b id="myTotal">0</b>개</p>
+    <p class="myscore" id="meName"></p>
     <div class="choices">
       <button class="choice C" data-choice="C"><span class="emoji">🤝</span>협력</button>
       <button class="choice D" data-choice="D"><span class="emoji">😈</span>배신</button>
@@ -92,16 +92,10 @@
     <div class="col-side"><div class="card"><div class="js-payoff"></div></div></div>
   </section>
 
-  <!-- 라운드 결과 -->
-  <section id="result" class="screen two-col hidden">
-    <div class="col-main">
-    <p class="roundno"><span id="resRound">1</span>라운드 결과</p>
-    <div class="result-grid" id="resGrid"></div>
-    <p class="result-msg" id="resMsg"></p>
-    <p class="myscore">지금까지 내 사탕 <b id="resTotal">0</b>개</p>
-    <button class="btn" id="nextRound">다음 라운드 ▶</button>
-    </div>
-    <div class="col-side"><div class="card"><div class="js-payoff"></div></div></div>
+  <!-- 라운드 사이 안내: 선택·사탕 결과는 게임이 끝난 뒤에만 공개 -->
+  <section id="result" class="screen hidden">
+    <p class="roundno"><span id="resRound">1</span>라운드 완료!</p>
+    <p class="result-msg" id="resMsg">다음 라운드로</p>
   </section>
 
   <!-- 최종 -->

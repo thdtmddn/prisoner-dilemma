@@ -131,11 +131,12 @@ async function runDevice(browser, engine, name, dev, save) {
   await B.tap('#confirmChoice');
   await A.waitForSelector('#result:not(.hidden)');
   await B.waitForSelector('#result:not(.hidden)');
-  info.result = await audit(A, label, '라운드 결과');
-  check(await inView(A, '#nextRound'), label, '결과: "다음 라운드" 버튼이 첫 화면에 안 보임');
+  info.result = await audit(A, label, '라운드 완료 안내');
+  check(await inView(A, '#resMsg'), label, '안내: "다음 라운드로" 문구가 첫 화면에 안 보임');
+  check((await A.textContent('#resMsg')).includes('다음 라운드'), label, '안내 화면에 선택·사탕 결과가 보임');
   await shot(A, '05_round_result');
-  await A.tap('#nextRound');
-  await B.tap('#nextRound');
+  await A.waitForSelector('#play:not(.hidden)');
+  await B.waitForSelector('#play:not(.hidden)');
 
   // 2라운드: B가 고른 뒤 새로고침
   await B.waitForSelector('#play:not(.hidden)');
@@ -160,8 +161,8 @@ async function runDevice(browser, engine, name, dev, save) {
   await A.tap('#confirmChoice');
   await A.waitForSelector('#result:not(.hidden)');
   await B.waitForSelector('#result:not(.hidden)');
-  await A.tap('#nextRound');
-  await B.tap('#nextRound');
+  await A.waitForSelector('#play:not(.hidden)');
+  await B.waitForSelector('#play:not(.hidden)');
 
   const play = async (a, b) => {
     for (const [p, c] of [[A, a], [B, b]]) {
@@ -171,8 +172,8 @@ async function runDevice(browser, engine, name, dev, save) {
     }
     await A.waitForSelector('#result:not(.hidden)');
     await B.waitForSelector('#result:not(.hidden)');
-    await A.tap('#nextRound');
-    await B.tap('#nextRound');
+    await A.waitForSelector('#play:not(.hidden), #final:not(.hidden)');
+    await B.waitForSelector('#play:not(.hidden), #final:not(.hidden)');
   };
   await play('D', 'C');
   await play('D', 'D');
@@ -241,8 +242,10 @@ async function runStorageBlocked(browser, engine) {
     await B.tap('#doJoin');
     for (let r = 0; r < 5; r++) {
       for (const p of [A, B]) { await p.waitForSelector('#play:not(.hidden)'); await p.tap('.choice.C'); await p.tap('#confirmChoice'); }
-      await A.waitForSelector('#result:not(.hidden)'); await B.waitForSelector('#result:not(.hidden)');
-      await A.tap('#nextRound'); await B.tap('#nextRound');
+      if (r < 4) {
+        await A.waitForSelector('#result:not(.hidden)');
+        await A.waitForSelector('#play:not(.hidden)');
+      }
     }
     await A.waitForSelector('#final:not(.hidden)');
     const totals = await A.$$eval('#finalTotals .num', (els) => els.map((e) => e.textContent).join(','));

@@ -65,11 +65,12 @@ const check = (c, m) => { console.log((c ? '  ✔ ' : '  ✘ ') + m); if (!c) fa
   await B.click('#confirmChoice');
   await A.waitForSelector('#result:not(.hidden)');
   await B.waitForSelector('#result:not(.hidden)');
-  check((await A.textContent('#resMsg')).includes('상대가 배신'), 'A 결과: 상대가 배신');
-  check((await B.textContent('#resGrid')).includes('+5'), 'B 결과: +5');
+  check((await A.textContent('#resRound')).trim() === '1', '1라운드 완료 안내');
+  check((await A.textContent('#resMsg')).includes('다음 라운드'), '선택·사탕 결과 없이 다음 라운드 안내만');
   await shot(A, '07_round_result.png');
-  await A.click('#nextRound');
-  await B.click('#nextRound');
+  await A.waitForSelector('#play:not(.hidden)');
+  await B.waitForSelector('#play:not(.hidden)');
+  check((await A.textContent('#roundNo')).trim() === '2', '안내 후 자동으로 2라운드');
 
   const play = async (a, b) => {
     for (const [p, c] of [[A, a], [B, b]]) {
@@ -79,8 +80,8 @@ const check = (c, m) => { console.log((c ? '  ✔ ' : '  ✘ ') + m); if (!c) fa
     }
     await A.waitForSelector('#result:not(.hidden)');
     await B.waitForSelector('#result:not(.hidden)');
-    await A.click('#nextRound');
-    await B.click('#nextRound');
+    await A.waitForSelector('#play:not(.hidden)');
+    await B.waitForSelector('#play:not(.hidden)');
   };
   // 2라운드: B가 고른 뒤 새로고침
   await A.waitForSelector('#play:not(.hidden)');
@@ -95,16 +96,14 @@ const check = (c, m) => { console.log((c ? '  ✔ ' : '  ✘ ') + m); if (!c) fa
   await A.click('#confirmChoice');
   await A.waitForSelector('#result:not(.hidden)');
   await B.waitForSelector('#result:not(.hidden)');
-  await A.click('#nextRound');
-  await B.click('#nextRound');
-  await play('D', 'C'); // 3라운드 5/0
-  await play('D', 'D'); // 4라운드 1/1
+  await A.waitForSelector('#play:not(.hidden)');
+  await B.waitForSelector('#play:not(.hidden)');
+  await play('D', 'C'); // 3라운드
+  await play('D', 'D'); // 4라운드
   // 5라운드
   for (const [p, c] of [[A, 'C'], [B, 'C']]) { await p.waitForSelector('#play:not(.hidden)'); await p.click('.choice.' + c); await p.click('#confirmChoice'); }
   await A.waitForSelector('#result:not(.hidden)');
-  check((await A.textContent('#nextRound')).includes('최종'), '마지막 라운드 뒤 "최종 결과 보기" 버튼');
-  await A.click('#nextRound');
-  await B.click('#nextRound');
+  check((await A.textContent('#resMsg')).includes('끝났어요'), '마지막 라운드 뒤 종료 안내');
   await A.waitForSelector('#final:not(.hidden)');
   await B.waitForSelector('#final:not(.hidden)');
   const totals = await A.$$eval('#finalTotals .num', (els) => els.map((e) => e.textContent));

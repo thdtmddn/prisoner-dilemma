@@ -101,6 +101,8 @@ label { display: block; font-weight: 700; margin: 10px 0 6px; }
 .result-box .what { font-size: 30px; font-size: clamp(30px, 9vw, 44px); font-weight: 900; }
 .result-box .gain { font-size: 24px; font-size: clamp(24px, 7vw, 34px); font-weight: 900; background: rgba(255,255,255,.22); border-radius: 12px; margin-top: 6px; padding: 4px; }
 .result-msg { text-align: center; font-size: 22px; font-weight: 700; margin: 12px 0 0; }
+#result { padding-top: 48px; }
+#result .roundno { margin-top: 24px; }
 
 .payoff { width: 100%; border-collapse: collapse; font-size: 16px; text-align: center; }
 .payoff th, .payoff td { border: 2px solid #ddd; padding: 8px 4px; }

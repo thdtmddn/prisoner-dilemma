@@ -207,10 +207,12 @@ function totals(room) {
   return t;
 }
 
-// 각 플레이어에게 보낼 화면 정보. 상대의 '이번 라운드' 선택은 절대 넣지 않는다.
+// 각 플레이어에게 보낼 화면 정보.
+// 상대의 '이번 라운드' 선택은 절대 넣지 않는다.
+// 라운드 기록·사탕 합계는 게임이 끝난 뒤에만 보낸다.
 function viewFor(room, seat) {
   const other = 1 - seat;
-  return {
+  const view = {
     code: room.code,
     seat,
     status: room.status,
@@ -222,9 +224,12 @@ function viewFor(room, seat) {
     ),
     myChoice: room.choices[seat],
     opponentChosen: room.choices[other] !== null,
-    history: room.history,
-    totals: totals(room),
   };
+  if (room.status === 'finished') {
+    view.history = room.history;
+    view.totals = totals(room);
+  }
+  return view;
 }
 
 function broadcastRoom(room) {
